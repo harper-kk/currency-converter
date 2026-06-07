@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -30,10 +31,7 @@
     text-transform: uppercase;
     margin-bottom: 16px;
   }
-  .amount-wrap {
-    position: relative;
-    margin-bottom: 12px;
-  }
+  .amount-wrap { margin-bottom: 12px; }
   .amount-wrap input {
     width: 100%;
     font-size: 28px;
@@ -66,11 +64,7 @@
     color: #fff;
     border-color: #1a1a1a;
   }
-  .divider {
-    height: 1px;
-    background: #f0f0ed;
-    margin-bottom: 16px;
-  }
+  .divider { height: 1px; background: #f0f0ed; margin-bottom: 16px; }
   .rate-row {
     display: flex;
     justify-content: space-between;
@@ -84,12 +78,7 @@
   .currency-name { font-size: 14px; color: #1a1a1a; font-weight: 500; }
   .currency-code { font-size: 11px; color: #9b9b9b; margin-top: 1px; }
   .rate-amount { font-size: 18px; font-weight: 600; color: #1a1a1a; }
-  .updated {
-    font-size: 11px;
-    color: #b0b0b0;
-    margin-top: 16px;
-    text-align: right;
-  }
+  .updated { font-size: 11px; color: #b0b0b0; margin-top: 16px; text-align: right; }
   .error { color: #c0392b; font-size: 13px; padding: 8px 0; }
 </style>
 </head>
@@ -122,33 +111,52 @@ let rates = {};
 let base = 'TWD';
 let amount = 1000;
 
+async function tryFrankfurter() {
+  const res = await fetch('https://api.frankfurter.app/latest?from=TWD&to=CZK,EUR,USD');
+  const data = await res.json();
+  return { TWD: 1, CZK: data.rates.CZK, EUR: data.rates.EUR, USD: data.rates.USD };
+}
+
+async function tryExchangeRate() {
+  const res = await fetch('https://open.er-api.com/v6/latest/TWD');
+  const data = await res.json();
+  return { TWD: 1, CZK: data.rates.CZK, EUR: data.rates.EUR, USD: data.rates.USD };
+}
+
+async function tryCurrencyAPI() {
+  // fallback: use a CORS-friendly proxy
+  const res = await fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/twd.json');
+  const data = await res.json();
+  return {
+    TWD: 1,
+    CZK: data.twd.czk,
+    EUR: data.twd.eur,
+    USD: data.twd.usd
+  };
+}
+
 async function fetchRates() {
-  try {
-    const res = await fetch('https://api.frankfurter.app/latest?from=TWD&to=CZK,EUR,USD');
-    const data = await res.json();
-    rates['TWD'] = 1;
-    rates['CZK'] = data.rates.CZK;
-    rates['EUR'] = data.rates.EUR;
-    rates['USD'] = data.rates.USD;
-    const now = new Date();
-    document.getElementById('updated-time').textContent =
-      '更新：' + now.toLocaleDateString('zh-TW') + ' ' + now.toLocaleTimeString('zh-TW', {hour:'2-digit',minute:'2-digit'});
-    render();
-  } catch(e) {
-    document.getElementById('rates-container').innerHTML = '<div class="error">匯率載入失敗，請確認網路連線</div>';
+  const attempts = [tryFrankfurter, tryExchangeRate, tryCurrencyAPI];
+  for (const attempt of attempts) {
+    try {
+      rates = await attempt();
+      const now = new Date();
+      document.getElementById('updated-time').textContent =
+        '更新：' + now.toLocaleDateString('zh-TW') + ' ' + now.toLocaleTimeString('zh-TW', {hour:'2-digit',minute:'2-digit'});
+      render();
+      return;
+    } catch(e) { continue; }
   }
+  document.getElementById('rates-container').innerHTML = '<div class="error">匯率載入失敗，請確認網路連線</div>';
 }
 
 function convert(from, to, amt) {
   if (!rates[from] || !rates[to]) return '—';
-  const inTWD = amt / rates[from];
-  const result = inTWD * rates[to];
-  return result.toLocaleString('zh-TW', { maximumFractionDigits: 2 });
+  return (amt / rates[from] * rates[to]).toLocaleString('zh-TW', { maximumFractionDigits: 2 });
 }
 
 function render() {
-  const container = document.getElementById('rates-container');
-  container.innerHTML = currencies
+  document.getElementById('rates-container').innerHTML = currencies
     .filter(c => c.code !== base)
     .map(c => `
       <div class="rate-row">
