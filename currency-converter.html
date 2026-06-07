@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>匯率換算</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    background: #f7f6f3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 16px;
+  }
+  .card {
+    background: #fff;
+    border-radius: 12px;
+    border: 1px solid #e8e8e4;
+    padding: 20px;
+    width: 100%;
+    max-width: 360px;
+  }
+  .title {
+    font-size: 13px;
+    color: #9b9b9b;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  .amount-wrap {
+    position: relative;
+    margin-bottom: 12px;
+  }
+  .amount-wrap input {
+    width: 100%;
+    font-size: 28px;
+    font-weight: 600;
+    color: #1a1a1a;
+    border: none;
+    border-bottom: 2px solid #1a1a1a;
+    background: transparent;
+    padding: 4px 0 6px;
+    outline: none;
+  }
+  .base-btns {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+  .base-btn {
+    padding: 5px 12px;
+    border-radius: 6px;
+    border: 1px solid #ddd;
+    background: #fff;
+    color: #666;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .base-btn.active {
+    background: #1a1a1a;
+    color: #fff;
+    border-color: #1a1a1a;
+  }
+  .divider {
+    height: 1px;
+    background: #f0f0ed;
+    margin-bottom: 16px;
+  }
+  .rate-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid #f0f0ed;
+  }
+  .rate-row:last-child { border-bottom: none; }
+  .currency-info { display: flex; align-items: center; gap: 10px; }
+  .flag { font-size: 22px; line-height: 1; }
+  .currency-name { font-size: 14px; color: #1a1a1a; font-weight: 500; }
+  .currency-code { font-size: 11px; color: #9b9b9b; margin-top: 1px; }
+  .rate-amount { font-size: 18px; font-weight: 600; color: #1a1a1a; }
+  .updated {
+    font-size: 11px;
+    color: #b0b0b0;
+    margin-top: 16px;
+    text-align: right;
+  }
+  .error { color: #c0392b; font-size: 13px; padding: 8px 0; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="title">即時匯率</div>
+  <div class="amount-wrap">
+    <input type="number" id="amount" value="1000" min="0" />
+  </div>
+  <div class="base-btns" id="base-btns">
+    <button class="base-btn active" data-code="TWD">🇹🇼 TWD</button>
+    <button class="base-btn" data-code="CZK">🇨🇿 CZK</button>
+    <button class="base-btn" data-code="EUR">🇪🇺 EUR</button>
+    <button class="base-btn" data-code="USD">🇺🇸 USD</button>
+  </div>
+  <div class="divider"></div>
+  <div id="rates-container"><div style="color:#9b9b9b;font-size:14px;">載入中...</div></div>
+  <div class="updated" id="updated-time"></div>
+</div>
+
+<script>
+const currencies = [
+  { code: 'TWD', flag: '🇹🇼', name: '台幣' },
+  { code: 'CZK', flag: '🇨🇿', name: '克朗' },
+  { code: 'EUR', flag: '🇪🇺', name: '歐元' },
+  { code: 'USD', flag: '🇺🇸', name: '美金' },
+];
+
+let rates = {};
+let base = 'TWD';
+let amount = 1000;
+
+async function fetchRates() {
+  try {
+    const res = await fetch('https://api.frankfurter.app/latest?from=TWD&to=CZK,EUR,USD');
+    const data = await res.json();
+    rates['TWD'] = 1;
+    rates['CZK'] = data.rates.CZK;
+    rates['EUR'] = data.rates.EUR;
+    rates['USD'] = data.rates.USD;
+    const now = new Date();
+    document.getElementById('updated-time').textContent =
+      '更新：' + now.toLocaleDateString('zh-TW') + ' ' + now.toLocaleTimeString('zh-TW', {hour:'2-digit',minute:'2-digit'});
+    render();
+  } catch(e) {
+    document.getElementById('rates-container').innerHTML = '<div class="error">匯率載入失敗，請確認網路連線</div>';
+  }
+}
+
+function convert(from, to, amt) {
+  if (!rates[from] || !rates[to]) return '—';
+  const inTWD = amt / rates[from];
+  const result = inTWD * rates[to];
+  return result.toLocaleString('zh-TW', { maximumFractionDigits: 2 });
+}
+
+function render() {
+  const container = document.getElementById('rates-container');
+  container.innerHTML = currencies
+    .filter(c => c.code !== base)
+    .map(c => `
+      <div class="rate-row">
+        <div class="currency-info">
+          <span class="flag">${c.flag}</span>
+          <div>
+            <div class="currency-name">${c.name}</div>
+            <div class="currency-code">${c.code}</div>
+          </div>
+        </div>
+        <div class="rate-amount">${convert(base, c.code, amount)}</div>
+      </div>
+    `).join('');
+}
+
+document.getElementById('amount').addEventListener('input', e => {
+  amount = parseFloat(e.target.value) || 0;
+  if (Object.keys(rates).length) render();
+});
+
+document.getElementById('base-btns').addEventListener('click', e => {
+  const btn = e.target.closest('.base-btn');
+  if (!btn) return;
+  base = btn.dataset.code;
+  document.querySelectorAll('.base-btn').forEach(b => b.classList.toggle('active', b === btn));
+  if (Object.keys(rates).length) render();
+});
+
+fetchRates();
+</script>
+</body>
+</html>
